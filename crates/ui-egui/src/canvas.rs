@@ -1162,30 +1162,12 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             // The caret contrasts with what lies under it, like Word's inverted caret (#299):
             // worked out only when something is drawn in it.
             let caret_color = |app: &mut WordApp| caret_color_at(app, &layout, c.page, c.x + c.width / 2.0, c.top + c.height / 2.0, view, dim_body);
-            let bar = if c.width > 0.0 {
-                // Turned text (a table cell's text direction): the caret lies across the page.
-                [pos2(x, y0.round() + 0.5), pos2(x + c.width * scale, y0.round() + 0.5)]
+            // A composition in progress (Korean, Japanese, Chinese input) is drawn after the
+            // insertion point, and the caret stands after it, as Word's inline composition does
+            // (otherwise the caret sits before the syllable being composed).
+            let preedit_end = if app.canvas.ime_preedit.is_empty() {
+                None
             } else {
-                [pos2(x.round() + 0.5, y0), pos2(x.round() + 0.5, y1)]
-            };
-            // The caret glides and fades like Word's (`caret_glide`).
-            let shown = app.session.sel.is_collapsed() && focused;
-            let look = crate::caret_glide::look(app, ui, content_origin, &geo, bar, shown, since, on);
-            if shown && look.opacity > 0.0 {
-                painter.line_segment(look.bar, Stroke::new(1.5, caret_color(app).gamma_multiply(look.opacity)));
-            }
-            if focused {
-                ui.ctx().request_repaint_after(std::time::Duration::from_millis(530 - (since as u64 % 530)));
-            }
-            // IME candidate window placement.
-            let cr = Rect::from_min_max(pos2(x, y0), pos2(x + 1.0, y1));
-            if focused {
-                ui.ctx().output_mut(|o| {
-                    o.ime =
-                        Some(egui::output::IMEOutput { rect: cr, cursor_rect: cr, purpose: Default::default(), should_interrupt_composition: false });
-                });
-            }
-            if !app.canvas.ime_preedit.is_empty() {
                 // The composition is interface text, but it may be in a script the interface fonts lack
                 // (Bangla, Thai ...): borrow the document fonts' fallback faces, or it draws as boxes (#565).
                 let new = crate::theme::faces_for_preedit(
@@ -1208,6 +1190,31 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 let caret_color = caret_color(app);
                 let g = painter.text(pos2(x, y1), egui::Align2::LEFT_BOTTOM, &app.canvas.ime_preedit, regular(c.height * scale * 0.8), caret_color);
                 painter.line_segment([pos2(g.min.x, g.max.y), pos2(g.max.x, g.max.y)], Stroke::new(1.0, caret_color));
+                Some(g.max.x)
+            };
+            let cx = preedit_end.unwrap_or(x);
+            let bar = if c.width > 0.0 {
+                // Turned text (a table cell's text direction): the caret lies across the page.
+                [pos2(x, y0.round() + 0.5), pos2(x + c.width * scale, y0.round() + 0.5)]
+            } else {
+                [pos2(cx.round() + 0.5, y0), pos2(cx.round() + 0.5, y1)]
+            };
+            // The caret glides and fades like Word's (`caret_glide`).
+            let shown = app.session.sel.is_collapsed() && focused;
+            let look = crate::caret_glide::look(app, ui, content_origin, &geo, bar, shown, since, on);
+            if shown && look.opacity > 0.0 {
+                painter.line_segment(look.bar, Stroke::new(1.5, caret_color(app).gamma_multiply(look.opacity)));
+            }
+            if focused {
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(530 - (since as u64 % 530)));
+            }
+            // IME candidate window placement: after the composition in progress.
+            let cr = Rect::from_min_max(pos2(cx, y0), pos2(cx + 1.0, y1));
+            if focused {
+                ui.ctx().output_mut(|o| {
+                    o.ime =
+                        Some(egui::output::IMEOutput { rect: cr, cursor_rect: cr, purpose: Default::default(), should_interrupt_composition: false });
+                });
             }
         }
         crate::objects::paint(app, &painter, &t, &layout, &rects, geo.scale);
