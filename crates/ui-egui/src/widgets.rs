@@ -584,7 +584,7 @@ fn combo_impl(
                 }
             });
         }
-        let te = egui::TextEdit::singleline(&mut text).id(te_id).desired_width(width - 16.0).font(regular(12.0)).margin(vec2(4.0, 3.0));
+        let te = egui::TextEdit::singleline(&mut text).id(te_id).desired_width(width - 16.0).font(regular(12.0)).margin(vec2(8.0, 3.0));
         let resp = ui.add(te);
         keytip_badge(ui, resp.rect, "combo", id);
         focused = resp.has_focus();
